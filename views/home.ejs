@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+        }
+        .nav-links {
+            margin-bottom: 20px;
+        }
+        a {
+            text-decoration: none;
+            margin-right: 10px;
+            color: blue;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome to Our Search Engine!</h1>
+    <div class="nav-links">
+        <a href="/login">Login</a>
+        <a href="/signup">Sign Up</a>
+        <% if (user) { %>
+            <a href="/search">Search</a>
+        <% } %>
+    </div>
+    <% if (user) { %>
+        <p>Welcome, <%= user.username %>!</p>
+    <% } else { %>
+        <p>Please login or sign up to use the search feature.</p>
+    <% } %>
+</body>
+</html>

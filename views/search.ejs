@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Search</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: url('/views/img/img1.jpg') no-repeat center center fixed;
+            background-size: cover;
+            color: white;
+            height: 100vh;
+        }
+        .search-container {
+            text-align: center;
+            padding-top: 50px;
+        }
+        h1 {
+            font-size: 3em;
+            text-shadow: 2px 2px 4px #000000;
+        }
+        form {
+            margin-top: 20px;
+        }
+        .search-box {
+            padding: 10px 15px;
+            width: 50%;
+            border: none;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .submit-btn {
+            padding: 10px 15px;
+            background-color: #e50914;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+        }
+        .submit-btn:hover {
+            background-color: #f40612;
+        }
+        .logout-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 5px 10px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .logout-btn:hover {
+            background-color: #555;
+        }
+        /* You may want to add additional styles for the results display */
+    </style>
+</head>
+<body>
+    <button class="logout-btn" onclick="window.location.href='/logout'">Logout</button>
+    <div class="search-container">
+        <h1>Movie Search Engine</h1>
+        <form action="/search" method="GET">
+            <input type="text" name="query" class="search-box" placeholder="Search for movies..." required>
+            <button type="submit" class="submit-btn">Search</button>
+        </form>
+    </div>
+    <% if (searchResults && searchResults.length > 0) { %>
+        <!-- Display search results -->
+        <% // TODO: Loop through search results and display them %>
+    <% } %>
+</body>
+</html>
