@@ -1,94 +1,122 @@
+require('dotenv').config({ path: 'C:/Users/jacka/OneDrive/Desktop/School/Semester 3/Sprint 2/FS DB JS/process.env' });
 const express = require('express');
 const session = require('express-session');
-const mongoose = require('mongoose'); // For MongoDB
-const { Pool } = require('pg'); // For PostgreSQL
+const mongoose = require('mongoose');  // For MongoDB
+const { Pool } = require('pg');  // For PostgreSQL
+const bcrypt = require('bcrypt');
+const saltRounds = 10;  // Salt rounds for bcrypt
 const app = express();
-
+console.log("MongoDB URI: ", process.env.MONGODB_URI);
+console.log("PostgreSQL Connection String: ", process.env.POSTGRESQL_CONNECTION_STRING);
+console.log("Session Secret: ", process.env.SESSION_SECRET);
 // MongoDB setup
-const mongoDbUri = 'your_mongodb_uri_here';
-mongoose.connect(mongoDbUri, { useNewUrlParser: true, useUnifiedTopology: true });
+const mongoDbUri = process.env.MONGODB_URI;
+mongoose.connect(mongoDbUri); // Removed the deprecated options
 const dbMongo = mongoose.connection;
 dbMongo.on('error', console.error.bind(console, 'MongoDB connection error:'));
 
+// MongoDB User Schema Setup
+const userSchema = new mongoose.Schema({
+    username: String,
+    email: String,
+    password: String
+});
+const User = mongoose.model('User', userSchema);
+
 // PostgreSQL setup
 const pool = new Pool({
-  connectionString: 'your_postgresql_connection_string_here'
-  // Additional PostgreSQL config options if necessary
+    connectionString: process.env.POSTGRESQL_CONNECTION_STRING
 });
 
-// Your database setup and middlewares (like body-parser) would go here
-
-// Setting up session handling
+// Session handling setup
 app.use(session({
-  secret: 'your-secret-key',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: true } // secure: true only for https!
+  cookie: { secure: process.env.NODE_ENV === 'production' }  // This ensures cookies are only used over HTTPS
 }));
-
-// Set view engine if you are using one (e.g., EJS)
+// Set EJS as the view engine
 app.set('view engine', 'ejs');
-// home
+
+// Home route
 app.get('/', (req, res) => {
-  res.render('home', { user: req.session.user });
+    res.render('home', { user: req.session.user });
 });
-// login
+
+// Login routes
 app.get('/login', (req, res) => {
-  res.render('login', { errors: [] });
+    res.render('login', { errors: [] });
 });
 
 app.post('/login', async (req, res) => {
-  const { username, password } = req.body;
-  // Implement your MongoDB or PostgreSQL logic here for user authentication
-  // Since you're not using bcrypt, make sure to have some password comparison mechanism
-  // Redirect or render based on the authentication result
+    const { username, password } = req.body;
+    try {
+        const userQuery = 'SELECT * FROM users WHERE username = $1';
+        const userResult = await pool.query(userQuery, [username]);
+
+        if (userResult.rows.length > 0) {
+            const user = userResult.rows[0];
+            const match = await bcrypt.compare(password, user.password);
+            if (match) {
+                req.session.userId = user.id;
+                res.redirect('/search');  // Redirect to search page if login is successful
+            } else {
+                res.render('login', { errors: ['Invalid username or password.'] });
+            }
+        } else {
+            res.render('login', { errors: ['User not found.'] });
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).render('login', { errors: ['An error occurred during the login process.'] });
+    }
 });
-// register
+
+// Register routes
 app.get('/register', (req, res) => {
-  res.render('register', { errors: [] });
+    res.render('register', { errors: [] });
 });
 
 app.post('/register', async (req, res) => {
-  const { username, email, password, confirmPassword } = req.body;
-  if (password !== confirmPassword) {
-    res.render('register', { errors: ['Passwords do not match.'] });
-    return;
-  }
-  // Implement your MongoDB or PostgreSQL logic here for user registration
-  // Make sure to hash the password before storing it, even if you're not using bcrypt
-  // Redirect or render based on the registration result
+    const { username, email, password, confirmPassword } = req.body;
+    if (password !== confirmPassword) {
+        res.render('register', { errors: ['Passwords do not match.'] });
+        return;
+    }
+    try {
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+        const newUser = new User({ username, email, password: hashedPassword });
+        await newUser.save();  // Save to MongoDB
+
+        const insertQuery = 'INSERT INTO users (username, email, password) VALUES ($1, $2, $3)';
+        await pool.query(insertQuery, [username, email, hashedPassword]);  // Save to PostgreSQL
+
+        res.redirect('/login');  // Redirect to login page after successful registration
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).render('register', { errors: ['Registration failed due to an internal error.'] });
+    }
 });
-// Search
+
+// Search route
 app.get('/search', async (req, res) => {
     if (!req.session.user) {
-        // Redirect to login if the user is not logged in
-        return res.redirect('/login');
+        return res.redirect('/login');  // Redirect to login if the user is not logged in
     }
 
-    let { query } = req.query; // Assuming you're passing the search term as a query string
+    let { query } = req.query;
+    try {
+        const mongoResults = await dbMongo.collection('movies').find({ $text: { $search: query } }).toArray();
+        const pgResults = await pool.query('SELECT * FROM movies WHERE title LIKE $1', [`%${query}%`]);
 
-    if (query) {
-        try {
-            // Example search logic for MongoDB and PostgreSQL
-
-            // MongoDB search (adjust according to your schema and needs)
-            const mongoResults = await dbMongo.collection('yourCollection').find({ $text: { $search: query } }).toArray();
-
-            // PostgreSQL search (adjust according to your schema and needs)
-            const pgResults = await pool.query('SELECT * FROM yourTable WHERE yourColumn LIKE $1', [`%${query}%`]);
-
-            // Combine results (this is very simplistic, adjust as needed for your application's logic)
-            const results = [...mongoResults, ...pgResults.rows];
-
-            res.render('search', { user: req.session.user, searchResults: results, query });
-        } catch (error) {
-            console.error('Search error:', error);
-            res.render('search', { user: req.session.user, searchResults: [], query, error: 'An error occurred during the search.' });
-        }
-    } else {
-        // If there is no query, just render the page without results
-        res.render('search', { user: req.session.user, searchResults: [], query: '' });
+        const results = [...mongoResults, ...pgResults.rows];
+        res.render('search', { user: req.session.user, searchResults: results, query });
+    } catch (error) {
+        console.error('Search error:', error);
+        res.render('search', { user: req.session.user, searchResults: [], query, error: 'An error occurred during the search.' });
     }
 });
 
-// server.js for express server.
+app.listen(process.env.PORT || 3000, () => {
+    console.log(`Server running on port ${process.env.PORT || 3000}`);
+});
