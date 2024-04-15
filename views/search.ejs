@@ -9,7 +9,7 @@
             font-family: 'Arial', sans-serif;
             margin: 0;
             padding: 0;
-            background: url('/views/img/img1.jpg') no-repeat center center fixed;
+            background: url('/img/img1.jpg') no-repeat center center fixed;
             background-size: cover;
             color: white;
             height: 100vh;
@@ -68,11 +68,20 @@
         <form action="/search" method="GET">
             <input type="text" name="query" class="search-box" placeholder="Search for movies..." required>
             <button type="submit" class="submit-btn">Search</button>
-        </form>
+        </form>        
     </div>
     <% if (searchResults && searchResults.length > 0) { %>
-        <!-- Display search results -->
-        <% // TODO: Loop through search results and display them %>
+        <div class="results">
+            <% searchResults.forEach(function(result) { %>
+                <div class="result-item">
+                    <h4><%= result.title %></h4>  <!-- Assuming 'title' is a field in your result objects -->
+                    <!-- Add other fields as needed -->
+                </div>
+            <% }); %>
+        </div>
+    <% } else { %>
+        <p>No results found for '<%= query %>'.</p>
     <% } %>
+    
 </body>
 </html>
