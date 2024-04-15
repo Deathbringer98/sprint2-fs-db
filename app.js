@@ -6,9 +6,13 @@ const { Pool } = require('pg');  // For PostgreSQL
 const bcrypt = require('bcrypt');
 const saltRounds = 10;  // Salt rounds for bcrypt
 const app = express();
-console.log("MongoDB URI: ", process.env.MONGODB_URI);
-console.log("PostgreSQL Connection String: ", process.env.POSTGRESQL_CONNECTION_STRING);
-console.log("Session Secret: ", process.env.SESSION_SECRET);
+const path = require('path');
+
+// Set up body parsing middleware
+app.use(express.urlencoded({ extended: true }));  // For parsing application/x-www-form-urlencoded
+app.use(express.json());  // For parsing application/json
+app.use('/img', express.static('public/img'));
+// Connect to the database using Mongoose
 // MongoDB setup
 const mongoDbUri = process.env.MONGODB_URI;
 mongoose.connect(mongoDbUri); // Removed the deprecated options
@@ -37,6 +41,7 @@ app.use(session({
 }));
 // Set EJS as the view engine
 app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
 
 // Home route
 app.get('/', (req, res) => {
@@ -50,6 +55,7 @@ app.get('/login', (req, res) => {
 
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
+    console.log("Attempting to log in with:", username);  // Debug: Log username attempt
     try {
         const userQuery = 'SELECT * FROM users WHERE username = $1';
         const userResult = await pool.query(userQuery, [username]);
@@ -58,12 +64,16 @@ app.post('/login', async (req, res) => {
             const user = userResult.rows[0];
             const match = await bcrypt.compare(password, user.password);
             if (match) {
-                req.session.userId = user.id;
-                res.redirect('/search');  // Redirect to search page if login is successful
+                console.log("Password match, setting session and redirecting...");  // Debug: Log success
+                req.session.userId = user.id;  // Ensure this session variable is correctly used in your app
+                req.session.user = user;  // Optionally add the whole user object
+                res.redirect('/search');
             } else {
+                console.log("Password mismatch");  // Debug: Log failure
                 res.render('login', { errors: ['Invalid username or password.'] });
             }
         } else {
+            console.log("User not found");  // Debug: Log failure
             res.render('login', { errors: ['User not found.'] });
         }
     } catch (error) {
@@ -72,10 +82,20 @@ app.post('/login', async (req, res) => {
     }
 });
 
+
 // Register routes
 app.get('/register', (req, res) => {
-    res.render('register', { errors: [] });
+    res.render('register', { errors: [] }, function(err, html) {
+      if (err) {
+        console.log(err);
+        res.status(500).send('Error rendering page');
+      } else {
+        res.send(html);
+      }
+    });
 });
+
+  
 
 app.post('/register', async (req, res) => {
     const { username, email, password, confirmPassword } = req.body;
@@ -90,18 +110,20 @@ app.post('/register', async (req, res) => {
 
         const insertQuery = 'INSERT INTO users (username, email, password) VALUES ($1, $2, $3)';
         await pool.query(insertQuery, [username, email, hashedPassword]);  // Save to PostgreSQL
-
         res.redirect('/login');  // Redirect to login page after successful registration
     } catch (error) {
         console.error('Registration error:', error);
-        res.status(500).render('register', { errors: ['Registration failed due to an internal error.'] });
+        res.status(500).render('register', { errors: ['Registration failed due to an internal error.', error.message] });
     }
 });
 
+
+
 // Search route
 app.get('/search', async (req, res) => {
-    if (!req.session.user) {
-        return res.redirect('/login');  // Redirect to login if the user is not logged in
+    console.log(req.query);  // Should log the query parameters
+    if (!req.session.userId) {
+        return res.redirect('/login');
     }
 
     let { query } = req.query;
