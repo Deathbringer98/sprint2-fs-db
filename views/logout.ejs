@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logged Out</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #f0f0f0;
+            text-align: center;
+            padding: 50px;
+        }
+        h1 {
+            color: #333;
+        }
+        a {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 15px;
+            background-color: #0056b3;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        a:hover {
+            background-color: #004494;
+        }
+    </style>
+</head>
+<body>
+    <h1>You have been successfully logged out.</h1>
+    <p><a href="/">Click here</a> if you are not redirected automatically.</p>
+    <script>
+        // JavaScript for automatic redirection
+        setTimeout(function() {
+            window.location.href = '/';
+        }, 5000); // Redirect after 5 seconds
+    </script>
+</body>
+</html>
