@@ -143,32 +143,27 @@ app.get('/search', async (req, res) => {
         return res.render('search', { user: req.session.user, searchResults: [], query: '', error: 'Please enter a search term.' });
     }
 
+    async function logUserQuery(username, searchQuery) {
+        const logPath = path.join(__dirname, 'UserQueryLogs', `${username}_queries.txt`);
+        const logEntry = `${new Date().toISOString()}: ${searchQuery}\n`;
+
+        try {
+            await fs.appendFile(logPath, logEntry);
+        } catch (err) {
+            console.error("Failed to log query:", err);
+        }
+    }
+
+    logUserQuery(req.session.user.username, query).catch(err => console.error("Error logging query:", err));
+
     try {
-        console.log(`Searching MongoDB for: ${query}`);
-        const mongoProjection = {
-            _id: 0,
-            movieID: 1,
-            title: 1,
-            releaseYear: 1,
-            genre: 1,
-            director: 1,
-            mainActor: 1,
-            rating: 1,
-            runtime: 1
-        };
         const mongoResults = await dbMongo.collection('movies')
                                          .find({ $text: { $search: query } })
-                                         .project(mongoProjection)
+                                         .project({ _id: 0, movieID: 1, title: 1, releaseYear: 1, genre: 1, director: 1, mainActor: 1, rating: 1, runtime: 1 })
                                          .toArray();
-        console.log(`MongoDB results: ${JSON.stringify(mongoResults)}`);
-        
-        console.log(`Searching PostgreSQL for: ${query}`);
-        const pgQuery = 'SELECT movie_id, title, release_year, genre, director, main_actor, rating, runtime FROM movie_db WHERE title ILIKE $1';
-        const pgResults = await pool.query(pgQuery, [`%${query}%`]);
-        console.log(`PostgreSQL results: ${JSON.stringify(pgResults.rows)}`);
-        
-        const results = mongoResults.concat(pgResults.rows);
-        console.log(`Combined results: ${JSON.stringify(results)}`);
+        const pgResults = await pool.query('SELECT movie_id, title, release_year, genre, director, main_actor, rating, runtime FROM movie_db WHERE title ILIKE $1', [`%${query}%`]);
+
+        const results = [...mongoResults, ...pgResults.rows];
         res.render('search', { user: req.session.user, searchResults: results, query });
     } catch (error) {
         console.error('Search error:', error);
