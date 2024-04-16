@@ -7,15 +7,31 @@ const bcrypt = require('bcrypt');
 const saltRounds = 10;
 const app = express();
 const path = require('path');
-const fs = require('fs').promises;  // Use the Promise-based version of the fs module
+const fs = require('fs').promises;
+
+// User Schema for MongoDB
 const userSchema = new mongoose.Schema({
     username: String,
     email: String,
     password: String
-}, { collection: 'users' });  // Make sure to specify the collection name if it's different in MongoDB
-
+}, { collection: 'users' });
 const User = mongoose.model('User', userSchema);
-// Body parsing middleware setup
+
+// Movie Schema for MongoDB
+const movieSchema = new mongoose.Schema({
+    movieID: Number,
+    title: String,
+    releaseYear: Number,
+    genre: String,
+    director: String,
+    mainActor: String,
+    rating: mongoose.Decimal128,
+    runtime: Number
+});
+movieSchema.index({ title: 'text' });
+const Movie = mongoose.model('Movie', movieSchema);
+
+// Middleware setup
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use('/img', express.static(path.join(__dirname, 'views/img')));
@@ -24,42 +40,27 @@ app.use('/img', express.static(path.join(__dirname, 'views/img')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// MongoDB connection setup
+// MongoDB connection
 const mongoDbUri = process.env.MONGODB_URI;
 mongoose.connect(mongoDbUri);
-
 const dbMongo = mongoose.connection;
 dbMongo.on('error', console.error.bind(console, 'MongoDB connection error:'));
-dbMongo.once('open', () => {
+dbMongo.once('open', async () => {
     console.log("Connected to MongoDB");
-    // Define Movie Schema and model
-    const movieSchema = new mongoose.Schema({
-        movieID: Number,              
-        title: String,                
-        releaseYear: Number,          
-        genre: String,                
-        director: String,             
-        mainActor: String,            
-        rating: mongoose.Decimal128,  
-        runtime: Number               
-    });
-    movieSchema.index({ title: 'text' });  // Create text index for the movie title field
-    const Movie = mongoose.model('Movie', movieSchema);
-    
-    // Initialize index creation
-    Movie.createIndexes().then(result => {
-        console.log("Text index created", result);
-    }).catch(err => {
+    try {
+        await Movie.createIndexes();
+        console.log("Text index created");
+    } catch (err) {
         console.error("Text index creation failed", err);
-    });
+    }
 });
 
-// PostgreSQL connection setup
+// PostgreSQL connection
 const pool = new Pool({
     connectionString: process.env.POSTGRESQL_CONNECTION_STRING
 });
 
-// Session middleware setup
+// Session handling
 app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
@@ -67,12 +68,11 @@ app.use(session({
     cookie: { secure: process.env.NODE_ENV === 'production' }
 }));
 
-// Define routes
+// Routes
 app.get('/', (req, res) => {
     res.render('home', { user: req.session.user });
 });
 
-// Login route
 app.get('/login', (req, res) => {
     res.render('login', { errors: [] });
 });
@@ -100,7 +100,6 @@ app.post('/login', async (req, res) => {
     }
 });
 
-// Register route
 app.get('/register', (req, res) => {
     res.render('register', { errors: [] });
 });
@@ -113,26 +112,16 @@ app.post('/register', async (req, res) => {
     }
     try {
         const hashedPassword = await bcrypt.hash(password, saltRounds);
-        // Save to MongoDB
         const newUser = new User({ username, email, password: hashedPassword });
-        await newUser.save().catch(err => {
-            throw new Error(`MongoDB Save Error: ${err.message}`);
-        });
-
-        // Save to PostgreSQL
-        await pool.query('INSERT INTO users (username, email, password) VALUES ($1, $2, $3)', [username, email, hashedPassword])
-            .catch(err => {
-                throw new Error(`PostgreSQL Save Error: ${err.message}`);
-            });
-
+        await newUser.save();
+        await pool.query('INSERT INTO users (username, email, password) VALUES ($1, $2, $3)', [username, email, hashedPassword]);
         res.redirect('/login');
     } catch (error) {
         console.error('Registration error:', error);
-        res.status(500).render('register', { errors: [`Registration failed due to an internal error. ${error.message}`] });
+        res.status(500).render('register', { errors: ['Registration failed due to an internal error.'] });
     }
 });
 
-// Logout route
 app.get('/logout', (req, res) => {
     req.session.destroy(err => {
         if (err) {
@@ -144,7 +133,6 @@ app.get('/logout', (req, res) => {
     });
 });
 
-// Search route
 app.get('/search', async (req, res) => {
     if (!req.session.userId || !req.session.user) {
         return res.redirect('/login');
@@ -155,34 +143,31 @@ app.get('/search', async (req, res) => {
         return res.render('search', { user: req.session.user, searchResults: [], query: '', error: 'Please enter a search term.' });
     }
 
-    // Function to log the query to a user-specific file within a specific folder
-    async function logUserQuery(username, query) {
-        const dirPath = path.join('C:/Users/jacka/OneDrive/Desktop/School/Semester 3/Sprint 2/FS DB JS/UserQueryLogs');
-        const filePath = path.join(dirPath, `${username}_Querys.txt`);
-        const now = new Date();
-        const logEntry = `${now.toLocaleString()} - Search Query: ${query}\n`;
-
-        try {
-            await fs.mkdir(dirPath, { recursive: true });  // Ensure directory exists
-            await fs.appendFile(filePath, logEntry, 'utf8');
-        } catch (err) {
-            console.error("Failed to write to log file", err);
-        }
-    }
-
-    // Log the user query asynchronously to avoid blocking
-    logUserQuery(req.session.user.username, query).catch(err => console.error("Error logging query", err));
-
     try {
         console.log(`Searching MongoDB for: ${query}`);
-        const mongoResults = await dbMongo.collection('movies').find({ $text: { $search: query } }).toArray();
+        const mongoProjection = {
+            _id: 0,
+            movieID: 1,
+            title: 1,
+            releaseYear: 1,
+            genre: 1,
+            director: 1,
+            mainActor: 1,
+            rating: 1,
+            runtime: 1
+        };
+        const mongoResults = await dbMongo.collection('movies')
+                                         .find({ $text: { $search: query } })
+                                         .project(mongoProjection)
+                                         .toArray();
         console.log(`MongoDB results: ${JSON.stringify(mongoResults)}`);
-
+        
         console.log(`Searching PostgreSQL for: ${query}`);
-        const pgResults = await pool.query('SELECT * FROM movie_db WHERE title ILIKE $1', [`%${query}%`]);
+        const pgQuery = 'SELECT movie_id, title, release_year, genre, director, main_actor, rating, runtime FROM movie_db WHERE title ILIKE $1';
+        const pgResults = await pool.query(pgQuery, [`%${query}%`]);
         console.log(`PostgreSQL results: ${JSON.stringify(pgResults.rows)}`);
-
-        const results = [...mongoResults, ...pgResults.rows];
+        
+        const results = mongoResults.concat(pgResults.rows);
         console.log(`Combined results: ${JSON.stringify(results)}`);
         res.render('search', { user: req.session.user, searchResults: results, query });
     } catch (error) {
@@ -190,7 +175,6 @@ app.get('/search', async (req, res) => {
         res.status(500).render('search', { user: req.session.user, searchResults: [], query, error: 'An error occurred during the search.' });
     }
 });
-
 
 app.listen(process.env.PORT || 3000, () => {
     console.log(`Server running on port ${process.env.PORT || 3000}`);

@@ -55,6 +55,17 @@
             border-radius: 5px;
             cursor: pointer;
         }
+        .results {
+            text-align: center;
+        }
+        .result-item {
+            background-color: #fff;
+            color: #000;
+            margin: 10px;
+            padding: 20px;
+            border-radius: 10px;
+            display: inline-block;
+        }
         .logout-btn:hover {
             background-color: #555;
         }
@@ -72,13 +83,20 @@
     </div>
     <% if (searchResults && searchResults.length > 0) { %>
         <div class="results">
-            <% searchResults.forEach(function(result) { %>
+            <% searchResults.forEach(function(movie) { %>
                 <div class="result-item">
-                    <h4><%= result.title %></h4>  <!-- Assuming 'title' is a field in your result objects -->
-                    <!-- Add other fields as needed -->
+                    <h2><%= movie.title %></h2>
+                    <p><strong>ID:</strong> <%= movie.movie_id %></p>
+                    <p><strong>Release Year:</strong> <%= movie.release_year %></p>
+                    <p><strong>Genre:</strong> <%= movie.genre %></p>
+                    <p><strong>Director:</strong> <%= movie.director %></p>
+                    <p><strong>Main Actor:</strong> <%= movie.main_actor %></p>
+                    <p><strong>Rating:</strong> <%= movie.rating %></p>
+                    <p><strong>Runtime:</strong> <%= movie.runtime %> minutes</p>
                 </div>
             <% }); %>
         </div>
+
     <% } else { %>
         <center><p>No results found for '<%= query %>'.</p></center>
     <% } %>
